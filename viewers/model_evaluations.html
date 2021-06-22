@@ -1,0 +1,296 @@
+<!doctype html>
+<html>
+<head>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css" integrity="sha384-ggOyR0iXCbMQv3Xipma34MD+dH/1fQ784/j6cY/iJTQUOhcWr7x9JvoRxT2MZw1T" crossorigin="anonymous">
+    <script src="https://code.jquery.com/jquery-3.3.1.slim.min.js" integrity="sha384-q8i/X+965DzO0rT7abK41JStQIAqVgRVzpbzo5smXKp4YfRvH+8abtTE1Pi6jizo" crossorigin="anonymous"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.14.7/umd/popper.min.js" integrity="sha384-UO2eT0CpHqdSJQ6hJty5KVphtPhzWj9WO1clHTMGa3JDZwrnQq4sF86dIHNDz0W1" crossorigin="anonymous"></script>
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/js/bootstrap.min.js" integrity="sha384-JjSmVgyd0p3pXB1rRibZUAYoIIy6OrQ6VrjIEaFf/nJGzIxFDsf4x0xIM+B07jRM" crossorigin="anonymous"></script>
+
+    <script src="https://cdn.plot.ly/plotly-2.0.0.min.js"></script>
+    <script type="text/javascript">
+        function parseCsv(txt) {
+            let csvLines = txt.split('\n');
+            let keys = csvLines[0].split(',');
+            let data = {};
+            for(let k = 0; k < keys.length; k++) data[keys[k]] = [];
+            let values;
+            for(let l = 1; l < csvLines.length; l++) {
+                values = csvLines[l].split(',');
+                for(let v = 0; v < values.length; v++)
+                    if(isNaN(values[v]))
+                        data[keys[v]].push(values[v]);
+                    else
+                        data[keys[v]].push(Number(values[v]));
+
+            }
+            return data;
+        }
+
+        function sulci_side_list(keys) {
+            let ss_list = [];
+            for(let k = 0; k < keys.length; k++) {
+                if(keys[k].substring(0, 4).localeCompare("ESI_") == 0)
+                    ss_list.push(keys[k].substring(4))
+            }
+            return ss_list.sort()
+        }
+
+        function loadScores(data, fileName, setName) {
+            const ss_list = sulci_side_list(Object.keys(data));
+
+            // Compute averages for each label
+            const avg_data = {"label": [], "bacc": [], "sens": [], "spec": [], "ESI": []}
+            const n_graphs = data['ESI_' + ss_list[0]].length;
+            const metrics = Object.keys(avg_data).slice(1);
+            let sorted_data = {};
+            let ss, tmp = {};
+            // For each label
+            for(let s = 0; s < ss_list.length; s++) {
+                ss = ss_list[s];
+                tmp = {};
+                // For each graph
+                for(let m = 0; m < metrics.length; m++) {
+                    tmp[metrics[m]] = [];
+                    for(let g = 0; g < n_graphs; g++)
+                        tmp[metrics[m]].push(data[metrics[m] + '_' + ss][g])
+                }
+                sorted_data[ss] = tmp;
+            }
+
+            // Get subjects names
+            let subjectsNames = [];
+            let gnameKey = Object.keys(data)[1];
+            for(let g = 0; g < data[gnameKey].length; g++) {
+                subjectsNames.push(data[gnameKey][g].split('/').slice(-1)[0].split('_')[0].slice(1));
+            }
+
+            let bacc_arr = [], esi_arr = [];
+            // For each label
+            for(let s = 0; s < ss_list.length; s++) {
+                bacc_arr.push(mean(sorted_data[ss_list[s]]['bacc']));
+                esi_arr.push(mean(sorted_data[ss_list[s]]['ESI']));
+            }
+
+            return {
+                model: setName,
+                file: fileName,
+                scores: sorted_data,
+                subjects: subjectsNames,
+                sulci_list: ss_list,
+                averages: {'bacc': mean(bacc_arr), 'ESI': mean(esi_arr)}
+            };
+        }
+
+        function mean(arr) {
+            let sum = 0;
+            for(let i = 0; i < arr.length; i++) sum += arr[i];
+            return sum / arr.length;
+        }
+
+        function std(arr) {
+            const avg = mean(arr)
+            let sum = 0;
+            for(let i = 0; i < arr.length; i++) sum += Math.pow(arr[i] - avg, 2);
+            return Math.sqrt(sum / arr.length);
+        }
+
+        function newScatterPlot(scores, s, id) {
+            let ss = scores[0]['sulci_list'][s];
+            let traces = [];
+            for(let t = 0; t < scores.length; t++) {
+                traces.push({
+                    x: scores[t]['scores'][ss]["sens"],
+                    y: scores[t]['scores'][ss]["spec"],
+                    text: scores[t]['subjects'],
+                    name: scores[t]['model'],
+                    hoverinfo: 'text',
+                    mode: 'markers',
+                    type: 'scatter',
+                    marker: {size: 6, opacity: 0.75}
+                });
+            }
+
+            let title = ss.split('_')[0];
+            if(title.slice(-1)[0] === '.') title = title.slice(0, -1);
+
+            let layout = {
+                title: { 'text': title },
+                margin: { l:40, r:0, t:20, b:20 },
+                width: 400,
+                height: 300,
+                font: { size: 10 }
+            };
+
+            let options = {
+                displayModeBar: false,
+                responsive: true
+            }
+            Plotly.newPlot(id, traces, layout, options);
+        }
+
+        function averagePlot(scores, id, metric, metricTitle) {
+            let ss_list = scores[0]['sulci_list'];
+
+            let traces = [];
+            for(let t=0; t < scores.length; t++) {
+                let averages = [], errors = [];
+                for (let s = 0; s < ss_list.length; s++) {
+                    averages.push(mean(scores[t]['scores'][ss_list[s]][metric]));
+                    errors.push(std(scores[t]['scores'][ss_list[s]][metric]));
+                }
+
+                traces.push({
+                    x: ss_list,
+                    y: averages,
+                    name: scores[t]['model'],
+                    type: 'bar',
+                    error_y: {type: 'data', array: errors, visible: true}
+                });
+            }
+
+            let layout = {
+                title: "Average " + metricTitle,
+                margin: { l:25, r:0, t:40, b:200 },
+                height: 600
+            };
+
+            let options = {
+                responsive: true
+            }
+            Plotly.newPlot(id, traces, layout, options);
+        }
+
+        function summary(scores, id) {
+            let html = '<table class="table"><thead><tr><th>Dataset</th>';
+            for(let t = 0; t < scores.length; t++) html += '<td>' + scores[t]['model'] + '</td>';
+            html += '</tr></thead><tbody><tr><th>File</th>';
+            for(let t = 0; t < scores.length; t++)
+                html += '<td>' + scores[t]['file'] + '</td>';
+            html += '</tr><tr><tr><th>Number of subjects</th>';
+            for(let t = 0; t < scores.length; t++)
+                html += '<td>' + scores[t]['subjects'].length + '</td>';
+            html += '</tr><th>Overall Bal. Acc.</th>';
+            for(let t = 0; t < scores.length; t++)
+                html += '<td>' + scores[t]['averages']['bacc'] + '</td>';
+            html += '</tr></tbody></table>';
+            document.getElementById(id).innerHTML = html;
+        }
+
+        function writeGraphs() {
+            const labels = scores[0]['sulci_list'];
+
+            let html = "";
+            for(let s = 0; s < labels.length; s++)
+                html += '<div style="float:left;" id="plot_' + s +'"></div>';
+            document.getElementById('scatter_plots').innerHTML = html;
+
+            for(let s = 0; s < labels.length; s++)
+                newScatterPlot(scores, s, 'plot_' + s);
+
+            averagePlot(scores, 'average_bacc', 'bacc', 'Balanced Accuracy');
+            averagePlot(scores, 'average_sens', 'sens', 'Sensibility');
+            averagePlot(scores, 'average_ESI', 'ESI', 'ESI');
+            summary(scores, 'summary');
+        }
+
+        function loadFile(file) {
+            var fileReader = new FileReader();
+            fileReader.onloadstart = function(progressEvent) {
+                const li = '<li id="' + file.name + '">' + file.name + '</li>';
+                document.getElementById('files-list').innerHTML += li;
+                //appendLog("Loading " + file.name);
+            }
+
+            fileReader.onload = function(progressEvent) {
+                const data = parseCsv(fileReader.result);
+                const names = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'];
+                scores.push(loadScores(data, file.name, names[scores.length]));
+                writeGraphs();
+                //appendLog("Graphs have been updated");
+            }
+            //fileReader.onloadend = function(progressEvent) {}
+            fileReader.onerror = function(progressEvent) {
+                //appendLog("An error occurred during loading of " + file.name);
+            }
+
+            // Read file asynchronously.
+            fileReader.readAsText(file, "UTF-8"); // fileReader.result -> String.
+        }
+
+        function dropHandler(evt) {
+            evt.stopPropagation();
+            evt.preventDefault();
+
+            // FileList object.
+            var files = evt.dataTransfer.files;
+            for(let f = 0; f < files.length; f++) {
+                loadFile(files[f]);
+            }
+        }
+
+        function dragoverHandler(evt) {
+            evt.stopPropagation();
+            evt.preventDefault();
+            // Explicitly show this is a copy.
+            evt.dataTransfer.dropEffect = 'copy';
+        }
+
+        /*function resetLog() {
+            document.getElementById('log-div').innerHTML = "";
+        }
+        function appendLog(msg) {
+            document.getElementById('log-div').innerHTML += "<br>" + msg;
+        }*/
+
+
+        let scores = [];
+        window.onload = function() {
+            let fileSelector = document.getElementById('eval_file');
+
+            fileSelector.addEventListener('change', (event) => {
+                let fileList = event.target.files;
+
+                const reader = new FileReader();
+                reader.addEventListener('loadend', (event) => {
+                    writeGraphs(event.target.result);
+                    console.log("Loading is finished");
+                });
+                reader.readAsText(fileList[0]);
+                console.log("Stat to load the file.");
+            });
+        };
+    </script>
+    <style>
+        #drop-area {
+            border: 1px solid blue;
+            padding: 15px;
+            margin-top:5px;
+        }
+
+    </style>
+</head>
+
+<body>
+    <h1>Deep Sulci </h1>
+    <h2>Model evaluation</h2>
+    <p>Drop CSV scores files in this box or use the above button.</p>
+    <div id="drop-area" ondragover="dragoverHandler(event)" ondrop="dropHandler(event)">
+        <ul id="files-list"></ul>
+    </div>
+    <input type="file" id="eval_file" accept=".csv" />
+    <!--<div id="log-div"></div>-->
+
+    <div class="report">
+        <h3>Infos</h3>
+        <div id="summary"></div>
+
+        <h3>Averages</h3>
+        <div id="average_bacc"></div>
+        <div id="average_sens"></div>
+        <div id="average_ESI"></div>
+
+        <h3>Specifivity vs. Sensitivity</h3>
+        <div class="row" id="scatter_plots"></div>
+    </div>
+</body>
+</html>
