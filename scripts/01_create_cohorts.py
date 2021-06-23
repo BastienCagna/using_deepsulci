@@ -21,9 +21,46 @@ from os import makedirs
 import json
 import argparse
 from using_deepsulci.cohort import bv_cohort, Cohort
+from soma import aims
 
 
-def foldico_cohorts(cohort_desc, hemi="both", composed_desc={}):
+def filter_sulci_names(in_graph, out_graph, sulci_names_to_keep=[], default_value='unknown'):
+    # graph conversion
+    graph = aims.read(in_graph)
+
+    for vertex in graph.vertices():
+        if 'name' in vertex.keys() and vertex['name'] not in sulci_names_to_keep:
+            vertex['name'] = default_value
+
+        # for visualization purpose only
+        if 'label' in vertex.keys():
+            if 'name' in vertex.keys() and vertex['name'] in sulci_names_to_keep:
+                print(vertex['name'], "have been found")
+                vertex['label'] = vertex['name']
+            else:
+                vertex['label'] = default_value
+    graph['label_property'] = 'label'
+
+    # save graph
+    aims.write(graph, out_graph)
+
+
+def filter_names_of_cohort(cohort, subgraph_dir, sulci_to_keep=[], default='unknown'):
+    makedirs(subgraph_dir, exist_ok=True)
+
+    for i, sub in enumerate(cohort.subjects):
+        sgraph_f = op.join(subgraph_dir, op.split(sub.graph)[1][:-4] + '_filtered.arg')
+        filter_sulci_names(sub.graph, sgraph_f, sulci_to_keep, default)
+        cohort.subjects[i].graph = sgraph_f
+
+        if sub.notcut_graph:
+            sgraph_f = op.join(subgraph_dir, op.split(sub.notcut_graph)[1][:-4] + '_filtered.arg')
+            filter_sulci_names(sub.notcut_graph, sgraph_f, sulci_to_keep, default)
+            cohort.subjects[i].notcut_graph = sgraph_f
+    return cohort
+
+
+def foldico_cohorts(cohort_desc, hemi="both", composed_desc={}, modified_graphs_dir=None):
     """ Create all used cohorts based on several available databases.  """
 
     hemis = ["L", "R"] if hemi == "both" else [hemi]
@@ -53,17 +90,17 @@ def foldico_cohorts(cohort_desc, hemi="both", composed_desc={}):
         for cname, desc in composed_desc.items():
             cohort = Cohort(cname + "_hemi-" + h, subjects=[])
             do_not_add = False
-            for cname2 in desc.keys():
+            for cname2 in desc['cohorts'].keys():
                 if cname2 not in cohorts.keys():
                     print("{} is unavailable (need {})".format(cname,
                                                                cname2))
                     do_not_add = True
                     break
 
-                if len(desc[cname2]["indexes"]) == 0:
+                if len(desc['cohorts'][cname2]["indexes"]) == 0:
                     cohort = cohort.concatenate(cohorts[cname2])
                 else:
-                    for subi in desc[cname2]["indexes"]:
+                    for subi in desc['cohorts'][cname2]["indexes"]:
                         if subi > len(cohorts[cname2]):
                             print("{} is unavailable (not enough subject in {})"
                                   .format(cname, cname2))
@@ -74,6 +111,10 @@ def foldico_cohorts(cohort_desc, hemi="both", composed_desc={}):
                                 cohorts[cname2].subjects[subi])
                     if do_not_add:
                         break
+                        
+            if modified_graphs_dir and 'keep_sulci_names' in desc.keys():
+                d = op.join(modified_graphs_dir, cohort.name)
+                cohort = filter_names_of_cohort(cohort, d, desc['keep_sulci_names'])
 
             if not do_not_add:
                 cohorts[cname] = cohort
@@ -93,12 +134,14 @@ def main():
     env = json.load(open(env_f))
 
     cohorts_dir = op.join(env['working_path'], "cohorts")
+    modg_dir = op.join(env['working_path'], "modified_graphs")
     makedirs(cohorts_dir, exist_ok=True)
     print("Cohorts will be saved to:", cohorts_dir)
 
     # Create all cohorts for both hemispheres
     cohorts = foldico_cohorts(env['cohorts'],
-                              composed_desc=env['composed_cohorts'])
+                              composed_desc=env['composed_cohorts'],
+                              modified_graphs_dir=modg_dir)
 
     for cohort in cohorts:
         fname = "cohort-" + cohort.name + ".json"

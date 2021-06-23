@@ -8,6 +8,7 @@ import signal
 import os
 import numpy as np
 
+from utils import html_intro, html_outro
 from deepsulci.sulci_labeling.capsul.labeling import SulciDeepLabeling
 # from deepsulci.sulci_labeling.capsul.error_computation import ErrorComputation
 
@@ -21,10 +22,26 @@ from capsul.api import capsul_engine
 
 def html_report(df, ss_list):
     N = len(df["s_"+ss_list[0]])
-    html = '<html><head>'
-    html += '<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.5.3/dist/css/bootstrap.min.css" integrity="sha384-TX8t27EcRE3e/ihU7zmQxVncDAy5uIKz4rEkgIXeMed4M0jlfIDPvg6uqKI2xXr2" crossorigin="anonymous">'
-    html += '</head><body>'
-    html += '<h1></h1>'
+    acc, bacc, sens, spec, esi = [], [], [], [], []
+    for ss in ss_list:
+        acc.extend(np.nan_to_num(df['acc_' + ss]))
+        bacc.extend(np.nan_to_num(df['bacc_' + ss]))
+        sens.extend(np.nan_to_num(df['sens_' + ss]))
+        spec.extend(np.nan_to_num(df['spec_' + ss]))
+        esi.extend(np.nan_to_num(df['ESI_' + ss]))
+    avg_acc, std_acc = np.mean(acc), np.std(acc)
+    avg_bacc, std_bacc = np.mean(bacc), np.std(bacc)
+    avg_sens, std_sens = np.mean(sens), np.std(sens)
+    avg_spec, std_spec = np.mean(spec), np.std(spec)
+    avg_esi, std_esi = np.mean(esi), np.std(esi)
+
+    html = '<h1></h1>'
+    html += '<p>Averaged results:</p><ul>'
+    html += '<li>Accuracy: {:02f}% (+/- {:.02f}%)</li>'.format(100*avg_acc, 100*std_acc)
+    html += '<li>Balanced accuracy: {:02f}% (+/- {:.02f}%)</li>'.format(100*avg_bacc, 100*std_bacc)
+    html += '<li>Sensitivity: {:02f}% (+/- {:.02f}%)</li>'.format(100*avg_sens, 100*std_sens)
+    html += '<li>Specificity: {:02f}% (+/- {:.02f}%)</li>'.format(100*avg_spec, 100*std_spec)
+    html += '<li>ESI: {:02f}% (+/- {:.02f}%)</li>'.format(100*avg_esi, 100*std_esi)
     html += '<table class="table"><thead><tr><td>Sulci</td><td>Occurences</td><td>Acc.</td><td>B. Acc.</td><td>Sensitivity</td><td>Specificity</td><td>ESI</td></tr></thead><tbody>'
     for ss in ss_list:
         n = np.sum(df['s_' + ss] > 0)
@@ -38,14 +55,7 @@ def html_report(df, ss_list):
         )
     html += '</tbody></table>'
 
-    html += '<script src="https://code.jquery.com/jquery-3.5.1.slim.min.js" ' \
-            'integrity="sha384-DfXdz2htPH0lsSSs5nCTpuj/zy4C+OGpamoFVy38MVBnE+' \
-            'IbbVYUew+OrCXaRkfj" crossorigin="anonymous"></script>'
-    html += '<script src="https://cdn.jsdelivr.net/npm/bootstrap@4.5.3/dist/' \
-            'js/bootstrap.bundle.min.js" integrity="sha384-ho+j7jyWK8fNQe+A12' \
-            'Hb8AhRq26LrZ/JpcUGGOn+Y7RsweNrtN/tE3MoK7ZeZDyx" crossorigin="ano' \
-            'nymous"></script>'
-    return html + '</body></html>'
+    return html_intro() + html + html_outro()
 
 
 def evaluation_job(sub, labeled_dir, model_file, param_file, ss_list, esi_dir):
@@ -109,6 +119,7 @@ def evaluate_model(cohort, model_file, param_file, labeled_dir, esi_dir=None,
     all_scores = pd.concat(dframes)
 
     all_scores.to_csv(op.join(esi_dir, "cohort-" + cohort.name + ".csv"))
+    print("HTML report: ", op.join(esi_dir, "cohort-" + cohort.name + ".html"))
     with open(op.join(esi_dir, "cohort-" + cohort.name + ".html"), 'w+') as f:
         f.write(html_report(all_scores, ss_list))
 

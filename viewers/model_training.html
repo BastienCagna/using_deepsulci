@@ -1,0 +1,107 @@
+<!doctype html>
+<html>
+<head>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css" integrity="sha384-ggOyR0iXCbMQv3Xipma34MD+dH/1fQ784/j6cY/iJTQUOhcWr7x9JvoRxT2MZw1T" crossorigin="anonymous">
+    <script src="https://code.jquery.com/jquery-3.3.1.slim.min.js" integrity="sha384-q8i/X+965DzO0rT7abK41JStQIAqVgRVzpbzo5smXKp4YfRvH+8abtTE1Pi6jizo" crossorigin="anonymous"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.14.7/umd/popper.min.js" integrity="sha384-UO2eT0CpHqdSJQ6hJty5KVphtPhzWj9WO1clHTMGa3JDZwrnQq4sF86dIHNDz0W1" crossorigin="anonymous"></script>
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/js/bootstrap.min.js" integrity="sha384-JjSmVgyd0p3pXB1rRibZUAYoIIy6OrQ6VrjIEaFf/nJGzIxFDsf4x0xIM+B07jRM" crossorigin="anonymous"></script>
+
+    <link rel="stylesheet" href="index/style.css">
+
+    <script src="https://cdn.plot.ly/plotly-2.0.0.min.js"></script>
+    <script src="index/utils.js"></script>
+    <script type="text/javascript">
+        function timePlot(data, id, metric, metricTitle) {
+            let traces = [];
+            console.log(data);
+            for(let t=0; t < data.length; t++) {
+                traces.push({
+                    x: data[t]['records']['epoch'],
+                    y: data[t]['records'][metric],
+                    name: data[t]['name'],
+                    mode: 'lines'
+                });
+            }
+
+            let layout = {
+                title: metricTitle
+            };
+
+            let options = {
+                responsive: true
+            }
+            Plotly.newPlot(id, traces, layout, options);
+        }
+
+        function writeGraphs() {
+            timePlot(models, 'model_train_loss', 'train_loss', 'Training Loss');
+            timePlot(models, 'model_test_acc', 'test_acc', 'Testing Accuracy');
+            timePlot(models, 'model_lr', 'lr', 'Learning Rate');
+            timePlot(models, 'model_momentum', 'momentum', 'Momentum');
+        }
+
+        function loadFile(file) {
+            var fileReader = new FileReader();
+            fileReader.onloadstart = function(progressEvent) {
+                const li = '<li id="' + file.name + '">' + file.name + '</li>';
+                document.getElementById('files-list').innerHTML += li;
+            }
+
+            fileReader.onload = function(progressEvent) {
+                models.push({
+                    name: file.name.slice(-8),
+                    records: parseCsv(fileReader.result)
+                });
+                writeGraphs();
+            }
+
+            // Read file asynchronously.
+            fileReader.readAsText(file, "UTF-8"); // fileReader.result -> String.
+        }
+
+        function dropHandler(evt) {
+            evt.stopPropagation();
+            evt.preventDefault();
+
+            // FileList object.
+            var files = evt.dataTransfer.files;
+            for(let f = 0; f < files.length; f++) {
+                loadFile(files[f]);
+            }
+        }
+
+        let models = [];
+        window.onload = function() {
+            let fileSelector = document.getElementById('eval_file');
+            fileSelector.addEventListener('change', (event) => {
+                loadFile(event.target.files);
+            });
+        };
+    </script>
+</head>
+
+<body>
+    <h1>Deep Sulci </h1>
+    <h2>Model Training Report</h2>
+    <p>Drop CSV log files in this box or use the above button.</p>
+    <div id="drop-area" ondragover="dragoverHandler(event)" ondrop="dropHandler(event)">
+        <ul id="files-list"></ul>
+    </div>
+    <input type="file" id="eval_file" accept=".csv" />
+    <!--<div id="log-div"></div>-->
+
+    <div class="report">
+        <!--<h3>Infos</h3>
+        <div id="summary"></div>-->
+        <h3>Log</h3>
+        <div class="row">
+            <div class="col-md-6" id="model_train_loss"></div>
+            <div class="col-md-6" id="model_lr"></div>
+        </div>
+        <div class="row">
+            <div class="col-md-6" id="model_test_acc"></div>
+            <div class="col-md-6" id="model_momentum"></div>
+        </div>
+    </div>
+</body>
+</html>

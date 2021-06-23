@@ -13,20 +13,25 @@ import shutil
 
 from using_deepsulci.cohort import Cohort
 from using_deepsulci.utils.misc import add_to_text_file
+from utils import Logger
+import sys
 
 
-def train_cohort(cohort, out_dir, fname, translation_file=None, steps=None,
+def train_cohort(cohort, out_dir, fname, dropout=0, lr=0, momentum=0, translation_file=None, steps=None,
                  cuda=-1, extend=None):
     proc = SulciDeepTraining()
 
     if extend:
         new_name = fname + "_ext-" + extend.name
+        print("Copying existing model files")
         for ext in ["_model.mdsm", "_params.json", "_traindata.json"]:
             shutil.copyfile(
                 op.join(out_dir, fname + ext),
                 op.join(out_dir, new_name + ext)
             )
         fname = new_name
+
+        cohort = cohort.concatenate(extend, cohort.name + '+' + extend.name)
 
     # Inputs
     proc.graphs = cohort.get_graphs()
@@ -41,13 +46,18 @@ def train_cohort(cohort, out_dir, fname, translation_file=None, steps=None,
     proc.step_4 = not steps or (steps and 4 in steps)
     #bool(len(cohort.get_notcut_graphs()))
 
+    proc.dropout = dropout
+    proc.learning_rate = lr
+    proc.momentum = momentum
+
     # Outputs
     proc.model_file = op.join(out_dir, fname + "_model.mdsm")
     proc.param_file = op.join(out_dir, fname + "_params.json")
+    proc.log_file = op.join(out_dir, fname + "_log.csv")
     proc.traindata_file = op.join(out_dir, fname + "_traindata.json")
 
     # Run
-    if op.exists(proc.model_file):
+    if op.exists(proc.model_file) and not extend:
         print("Skipping the training. Model file already exist.")
         print(proc.model_file)
     else:
@@ -63,6 +73,14 @@ def main():
 
     parser.add_argument('-s', dest='steps', type=int, nargs='+', default=None,
                         help='Steps to run')
+    parser.add_argument('--dropout', dest='dropout', type=float, default=0,
+                        help='Dropout')
+    parser.add_argument('--lr', dest='lr', type=float, default=0,
+                        help='Learning rate')
+    parser.add_argument('--momentum', dest='momentum', type=float, default=0,
+                        help='Momentum')
+    parser.add_argument('-m', dest='modelname', type=str,  required=True,
+                        help='Model name')
     parser.add_argument('--cuda', dest='cuda', type=int, default=-1,
                         help='Use a speciific cuda device ID or CPU (-1)')
     parser.add_argument('-e', dest='env', type=str, default=None,
@@ -86,16 +104,16 @@ def main():
     cohorts = sorted(cohorts, key=len)
 
     if args.extends:
-        extend = Cohort(from_json=op.join(cohorts_dir, "cohort-" + c + ".json"))
+        extend = Cohort(from_json=op.join(cohorts_dir, "cohort-" + args.extends + ".json"))
     else:
         extend = None
 
     for cohort in cohorts:
         print("\n\n ****** START TO TRAIN ", cohort.name)
-        now = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
-        add_to_text_file(log_f, "{} - Start to train {}".format(now, cohort.name))
-        fname = "cohort-" + cohort.name + "_model-unet3d"
-        train_cohort(cohort, outdir, fname, env['translation_file'],
+        fname = "cohort-" + cohort.name + "_model-" + args.modelname
+
+        sys.stdout = Logger(log_f)
+        train_cohort(cohort, outdir, fname, args.dropout, args.lr, args.momentum, env['translation_file'],
                      args.steps, args.cuda, extend)
     return None
 
