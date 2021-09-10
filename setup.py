@@ -9,5 +9,5 @@ setup(
     version='nc',
     packages=find_packages(),
     description="Custom script to work arround deepsulci",
-    install_requires=["numpy", "capsul", "soma"],
+    install_requires=["numpy", "capsul", "soma", "matplotlib", "pandas"],
 )

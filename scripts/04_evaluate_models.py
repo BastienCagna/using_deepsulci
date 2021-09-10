@@ -71,6 +71,8 @@ def evaluation_job(sub, labeled_dir, model_file, param_file, ss_list, esi_dir):
         lab_proc.param_file = param_file
         lab_proc.rebuild_attributes = False
         lab_proc.labeled_graph = labeled_graph
+        lab_proc.stat_file = labeled_graph[:-3] + 'json'
+        lab_proc.distribution_iter = 0
         lab_proc.run()
     else:
         print(labeled_graph, "already exists")
@@ -106,9 +108,7 @@ def evaluate_model(cohort, model_file, param_file, labeled_dir, esi_dir=None,
         json.dump(params, open(param_file, 'w+'))
 
     # results = parallel()
-    scores_files = Parallel(n_jobs=real_njobs(n_jobs))(delayed(evaluation_job) \
-      (sub, labeled_dir, model_file, param_file, ss_list, esi_dir)
-        for sub in cohort.subjects)
+    scores_files = Parallel(n_jobs=real_njobs(n_jobs))(delayed(evaluation_job) (sub, labeled_dir, model_file, param_file, ss_list, esi_dir) for sub in cohort.subjects)
 
     dframes = []
     for i, f in enumerate(scores_files):
@@ -134,6 +134,7 @@ def main():
     #                     help='Use a speciific cuda device ID or CPU (-1)')
     parser.add_argument('-e', dest='env', type=str, default=None,
                         help="Configuration file")
+    parser.add_argument('-r', dest='runs', type=int, nargs='+', default=[1], help='Runs to process')
     parser.add_argument('-n', dest='njobs', type=int, default=1, help='Number of parallel jobs')
     args = parser.parse_args()
 
@@ -148,16 +149,18 @@ def main():
     # cohortname = modelname.split("_model")[0]
     cohort_f = op.join(cohort_dir, args.cohort + ".json")
 
-    model_f = op.join(model_dir, args.model + "_model.mdsm")
-    params_f = op.join(model_dir, args.model + "_params.json")
+    for r in args.runs:
+        run = "run-{:02}".format(r)
+        model_f = op.join(model_dir, args.model, run, args.model + "_model.mdsm")
+        params_f = op.join(model_dir, args.model, run, args.model + "_params.json")
 
-    out_d = op.join(env['working_path'], "evaluations", args.model)
-    makedirs(out_d, exist_ok=True)
-    # fname = modelname + "_teston-" + cohortname + ".npy"
-    # evaluate_model(Cohort(from_json=cohort_f), env['translation_file'],
-    #                model_f, params_f, op.join(out_d, fname))
-    evaluate_model(Cohort(from_json=cohort_f), model_f, params_f,
-                   labeled_dir=out_d, n_jobs=args.njobs)
+        out_d = op.join(env['working_path'], "evaluations", args.model, run)
+        makedirs(out_d, exist_ok=True)
+        # fname = modelname + "_teston-" + cohortname + ".npy"
+        # evaluate_model(Cohort(from_json=cohort_f), env['translation_file'],
+        #                model_f, params_f, op.join(out_d, fname))
+        evaluate_model(Cohort(from_json=cohort_f), model_f, params_f,
+                       labeled_dir=out_d, n_jobs=args.njobs)
 
 
 if __name__ == "__main__":

@@ -74,7 +74,7 @@ class LabelingEvaluation(Process):
                 # True label where ss have been predicted
                 labels_ss = names[labels == ss]
 
-                # True Positives: ss is pedicted and is the true name
+                # True Positives: ss is predicted and is the true name
                 TP = float(len(names_ss[names_ss == ss]))*vvol
                 # False Positives: ss is predicted but this is not correct
                 FP = float(len(labels_ss[labels_ss != ss]))*vvol

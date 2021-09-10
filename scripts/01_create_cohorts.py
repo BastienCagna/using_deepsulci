@@ -111,10 +111,11 @@ def foldico_cohorts(cohort_desc, hemi="both", composed_desc={}, modified_graphs_
                                 cohorts[cname2].subjects[subi])
                     if do_not_add:
                         break
-                        
-            if modified_graphs_dir and 'keep_sulci_names' in desc.keys():
-                d = op.join(modified_graphs_dir, cohort.name)
-                cohort = filter_names_of_cohort(cohort, d, desc['keep_sulci_names'])
+
+            # FIXME: retest this
+            # if modified_graphs_dir and 'keep_sulci_names' in desc.keys():
+            #     d = op.join(modified_graphs_dir, cohort.name)
+            #     cohort = filter_names_of_cohort(cohort, d, desc['keep_sulci_names'])
 
             if not do_not_add:
                 cohorts[cname] = cohort

@@ -3,6 +3,25 @@ from joblib import cpu_count
 from using_deepsulci.cohort import Cohort
 from datetime import datetime
 import sys
+from os import system
+
+
+def extend_folds(folds):
+    extended_folds = []
+    for (train_cohort, test_cohorts) in folds:
+        if '*' in train_cohort:
+            for run in ['A', 'B', 'C']:
+                extended_folds.append((train_cohort.replace('*', run),
+                                       list(cohort.replace('*', run) for cohort
+                                            in test_cohorts)))
+        else:
+            extended_folds.append((train_cohort, test_cohorts))
+    return extended_folds
+
+
+def run(cmd):
+    print(cmd)
+    system(cmd)
 
 
 class Logger(object):
@@ -21,7 +40,7 @@ class Logger(object):
         self.terminal.flush()
 
 
-def real_njobs(n):
+def real_njobs(n=0):
     return min(n, cpu_count()) if n > 0 else cpu_count() - n
 
 
@@ -39,6 +58,7 @@ def html_intro(title=""):
     html += '<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.5.3/dist/css/bootstrap.min.css" integrity="sha384-TX8t27EcRE3e/ihU7zmQxVncDAy5uIKz4rEkgIXeMed4M0jlfIDPvg6uqKI2xXr2" crossorigin="anonymous">'
     html += '</head><body>'
     return html
+
 
 def html_outro():
     html = '<script src="https://code.jquery.com/jquery-3.5.1.slim.min.js" ' \
