@@ -37,10 +37,12 @@ class LabelingEvaluation(Process):
         self.add_trait('scores_file', traits.File(
             output=True,
             desc='file (.csv) storing the scores for each labeled graph'))
+        self.add_trait('verbose',
+                       traits.Bool(False, output=False,
+                                   desc='Print more informations'))
 
     def _run_process(self):
-        # Compute voronoi
-        mri = aims.read(self.t1mri)
+        # Read true labelling
         true_graph = aims.read(self.true_graph)
         vs = true_graph['voxel_size']
         vvol = vs[0]*vs[1]*vs[2]
@@ -48,21 +50,27 @@ class LabelingEvaluation(Process):
         nlist = list(set(true_names))
         dnames = {k: v+1 for k, v in zip(nlist, range(len(nlist)))}
         dnum = {v+1: k for k, v in zip(nlist, range(len(nlist)))}
+
+        # Compute voronoi (extends true label to get a label for all the voxels)
         fm = aims.FastMarching()
+        mri = aims.read(self.t1mri)
         vol = aims.Volume_S16(mri.getSizeX(), mri.getSizeY(), mri.getSizeZ())
         vol.fill(0)
         for p, n in zip(true_bck, true_names):
             vol[p[0], p[1], p[2]] = dnames[n]
-
         fm.doit(vol, [0], list(dnames.values()))
         vor = fm.voronoiVol()
 
         # Compute error rates
         re = pd.DataFrame(index=[str(g) for g in self.labeled_graphs])
         for gfile in self.labeled_graphs:
+            # Read the graph to evaluate
             graph = aims.read(gfile)
             bck, _, labels = extract_data(graph)
             labels = np.array(labels)
+
+            # Get true labels (aka names) cor"responding to each point of the
+            # evaluated graph
             y_pred = [vor[int(round(p[0])),
                           int(round(p[1])),
                           int(round(p[2]))][0] for p in bck]
@@ -95,7 +103,7 @@ class LabelingEvaluation(Process):
                 re.ix[gfile, 'FN_'+str(ss)] = FN
                 re.ix[gfile, 'TN_' + str(ss)] = TN
                 # Number of occurance of ss
-                re.ix[gfile, 's_'+str(ss)] = float(len(names_ss))*vvol
+                re.ix[gfile, 's_'+str(ss)] = FN + TP
 
             sum_s = sum([re.ix[gfile, 's_'+str(ss)] for ss in self.sulci_side_list])
             for ss in self.sulci_side_list:
@@ -106,6 +114,7 @@ class LabelingEvaluation(Process):
                 if FP + FN + 2*VP != 0:
                     re.ix[gfile, 'ESI_'+str(ss)] = s/sum_s * (FP + FN) / (FP + FN + 2*VP)
                     re.ix[gfile, 'Elocal_'+str(ss)] = s/sum_s * (FP + FN) / (FP + FN + VP)
+                    # re.ix[gfile, 'Elocal_'+str(ss)] = (FP + FN) / (FP + FN + VP)
                 else:
                     re.ix[gfile, 'ESI_'+str(ss)] = 0
                     re.ix[gfile, 'Elocal_'+str(ss)] = 0
@@ -114,31 +123,28 @@ class LabelingEvaluation(Process):
                                       for ss in self.sulci_side_list])
         re.to_csv(self.scores_file)
 
-        print('Mean ESI: %.3f' % re['ESI'].mean())
-        print('Max ESI: %.3f' % re['ESI'].max())
-        print()
-        for ss in self.sulci_side_list:
-            print('%s Elocal mean: %.3f, max: %.3f' %
-                  (ss, re['Elocal_'+str(ss)].mean(),
-                   re['Elocal_'+str(ss)].max()))
+        if self.verbose:
+            print('Mean ESI: %.3f' % re['ESI'].mean())
+            print('Max ESI: %.3f' % re['ESI'].max())
+            print()
+            for ss in self.sulci_side_list:
+                print('%s Elocal mean: %.3f, max: %.3f' %
+                      (ss, re['Elocal_'+str(ss)].mean(),
+                       re['Elocal_'+str(ss)].max()))
 
 
 def extract_data(graph):
     bck_types = ['aims_ss', 'aims_bottom', 'aims_other']
     names, labels, bck = [], [], []
     for vertex in graph.vertices():
-        if 'name' in vertex:
-            name = vertex['name']
-        else:
-            name = 'unknown'
-        if 'label' in vertex:
-            label = vertex['label']
-        else:
-            label = 'unknown'
+        name = vertex['name'] if 'name' in vertex else 'unknown'
+        label = vertex['label'] if 'label' in vertex else 'unknown'
         for bck_type in bck_types:
             if bck_type in vertex:
                 bucket = vertex[bck_type][0]
                 for point in bucket.keys():
+                    if point in bck:
+                        print("/!\\ Duplicate point is the bucket!")
                     bck.append(list(point))
                     names.append(name)
                     labels.append(label)

@@ -8,6 +8,7 @@ import nibabel.gifti as ng
 from sklearn.neighbors import KNeighborsClassifier
 import json
 from scipy.spatial.distance import euclidean
+from os import system
 
 
 def find_key(input_dict, value):
@@ -98,7 +99,6 @@ def convert_graph(gii_mesh_f, gii_texture_f, insula_texture_f, cing_texture_f,
             scr_d = (np.sum(kng_dist[:, pred] < 12) - np.sum(kng_dist[:, pred] < 7))/ n#1 / np.mean(kng_dist[:, pred])
             scr = scr_p#max(scr_d, scr_p)
             vert['name'] = keys_to_labels[labels[pred]] #if avg_p > .2 else "unknown"
-
             #print(vert['name'], scr_d, scr_p)
             scores[vert['index']] = {'scores': [scr]}
     # Save the graph and the scores
@@ -108,25 +108,37 @@ def convert_graph(gii_mesh_f, gii_texture_f, insula_texture_f, cing_texture_f,
 
 
 def main():
-    db_dir = "/neurospin/dico/data/bv_databases/baboon/marsBaboons"
-    txt_pattern = db_dir + "/Adrien/[sub]/t1mri/default_acquisition/default_analysis/segmentation/mesh/surface_analysis/[sub]_[hemi]graphLabelBasins.txt"
-    gii_pattern = db_dir + "/Adrien/[sub]/t1mri/default_acquisition/default_analysis/segmentation/mesh/surface_analysis/[sub]_[hemi]white_sulcalines_editedbyKK.gii"
-    giii_pattern = db_dir + "/Adrien/[sub]/t1mri/default_acquisition/default_analysis/segmentation/mesh/surface_analysis/[sub]_[hemi]white_pole_insula_KK.gii"
-    giic_pattern = db_dir + "/Adrien/[sub]/t1mri/default_acquisition/default_analysis/segmentation/mesh/surface_analysis/[sub]_[hemi]white_pole_cingular_KK.gii"
-    mesh_pattern = db_dir + "/Adrien/[sub]/t1mri/default_acquisition/default_analysis/segmentation/mesh/[sub]_[hemi]white_fine.gii"
-    arg_pattern = db_dir + "/Adrien/[sub]/t1mri/default_acquisition/default_analysis/folds/3.1/[hemi][sub].arg"
-    #out_pattern = "/neurospin/dico/bcagna/data/graph_conversion/marsBaboons/[sub]/[hemi][sub].arg"
-    out_pattern = db_dir + "/Adrien/[sub]/t1mri/default_acquisition/default_analysis/folds/3.1/default_session_KK/[hemi][sub]_default_session_KK.arg"
-    outm_pattern = "/neurospin/dico/bcagna/data/graph_conversion/marsBaboons/[sub]/[sub][hemi]white_fine.gii"
+    # For baboons:
+    # db_dir = "/neurospin/dico/data/bv_databases/baboon/marsBaboons/Adrien/"
+    # For macaques:
+    db_dir = "/neurospin/dico/data/bv_databases/macaque/marsMacaques/PRIME_DE/"
 
-    subs = list_subjects(op.join(db_dir, "Adrien"))
-    subs = ['_session_01_subject_hunt']
-    for i_s, sub in enumerate(subs[-1:]):
+    txt_pattern = db_dir + "[sub]/t1mri/default_acquisition/default_analysis/segmentation/mesh/surface_analysis/[sub]_[hemi]graphLabelBasins.txt"
+    gii_pattern = db_dir + "[sub]/t1mri/default_acquisition/default_analysis/segmentation/mesh/surface_analysis/[sub]_[hemi]white_sulcalines_editedbyKK.gii"
+    tgii_pattern = db_dir + "[sub]/t1mri/default_acquisition/default_analysis/segmentation/mesh/surface_analysis/[sub]_[hemi]white_sulcaline_editedbyKK.gii"
+    giii_pattern = db_dir + "[sub]/t1mri/default_acquisition/default_analysis/segmentation/mesh/surface_analysis/[sub]_[hemi]white_pole_insula_KK.gii"
+    giic_pattern = db_dir + "[sub]/t1mri/default_acquisition/default_analysis/segmentation/mesh/surface_analysis/[sub]_[hemi]white_pole_cingular_KK.gii"
+    mesh_pattern = db_dir + "[sub]/t1mri/default_acquisition/default_analysis/segmentation/mesh/[sub]_[hemi]white_fine.gii"
+    arg_pattern = db_dir + "[sub]/t1mri/default_acquisition/default_analysis/folds/3.1/[hemi][sub].arg"
+    out_pattern = db_dir + "[sub]/t1mri/default_acquisition/default_analysis/folds/3.1/default_session_KK/[hemi][sub]_default_session_KK.arg"
+    # outm_pattern = "/neurospin/dico/bcagna/data/graph_conversion/marsBaboons/[sub]/[sub][hemi]white_fine.gii"
+
+
+    subs = list_subjects(op.join(db_dir))
+    # subs = ['_session_01_subject_hunt']
+    for i_s, sub in enumerate(subs):
         for h in ['L', 'R']:
             print("subject {}/{} {} ({})".format(i_s+1, len(subs), h, sub))
             out_f = out_pattern.replace("[sub]", sub).replace("[hemi]", h)
             mesh_f = mesh_pattern.replace("[sub]", sub).replace("[hemi]", h)
             makedirs(op.split(out_f)[0], exist_ok=True)
+
+            f = gii_pattern.replace("[sub]", sub).replace("[hemi]", h)
+            ff = tgii_pattern.replace("[sub]", sub).replace("[hemi]", h)
+            if not op.exists(f) and op.exists(ff):
+                system("ln -s {} {}".format(ff, f))
+                print("New symlink to:", ff)
+
             convert_graph(
                 mesh_f,
                 gii_pattern.replace("[sub]", sub).replace("[hemi]", h),

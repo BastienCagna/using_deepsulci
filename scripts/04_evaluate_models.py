@@ -18,6 +18,7 @@ from joblib import Parallel, delayed
 from utils import real_njobs
 
 from capsul.api import capsul_engine
+ce = capsul_engine()
 
 
 def html_report(df, ss_list):
@@ -58,11 +59,31 @@ def html_report(df, ss_list):
     return html_intro() + html + html_outro()
 
 
-def evaluation_job(sub, labeled_dir, model_file, param_file, ss_list, esi_dir):
-    g_fname = op.split(sub.graph)[1]
+def evaluation_job(sub, labeled_dir, model_file, param_file, ss_list, esi_dir,
+                   voxel_size, n_iter=10, force=False):
+    graph_path = op.split(sub.graph)[1]
+    labeleds = []
+    # for i in range(n_iter):
+        # g_fname = graph_path[:-4] + '_seg-{:02d}.arg'.format(i)
+    g_fname = graph_path
     labeled_graph = op.join(labeled_dir, g_fname)
+    if force or not op.exists(labeled_graph):
+            # Sulci Segmentation
+            # seg_proc = ce.get_process_instance('morphologist.capsul.axon.sulcigraph')
+            # # Inputs
+            # seg_proc.skeleton = sub.skeleton
+            # seg_proc.roots = sub.roots
+            # seg_proc.grey_white = sub.grey_white
+            # seg_proc.hemi_cortex = sub.hemi_cortex
+            # seg_proc.split_brain = sub.split_brain
+            # seg_proc.white_mesh = sub.white_mesh
+            # seg_proc.pial_mesh = sub.pial_mesh
+            # # Outputs
+            # seg_proc.graph = labeled_graph
+            # seg_proc.sulci_voronoi = labeled_graph[:-4] + '_voronoi.nii.gz'
+            # seg_proc.run()
 
-    if not op.exists(labeled_graph):
+        # Graph labeling
         lab_proc = SulciDeepLabeling()
         lab_proc.graph = sub.graph
         lab_proc.roots = sub.roots
@@ -73,28 +94,35 @@ def evaluation_job(sub, labeled_dir, model_file, param_file, ss_list, esi_dir):
         lab_proc.labeled_graph = labeled_graph
         lab_proc.stat_file = labeled_graph[:-3] + 'json'
         lab_proc.distribution_iter = 0
+        lab_proc.voxel_size = voxel_size
+        lab_proc.verbose = False
         lab_proc.run()
     else:
         print(labeled_graph, "already exists")
+        # labeleds.append(labeled_graph)
 
+    # Labeling evaluation
     # esi_proc = ce.get_process_instance(
     #     'deepsulci.sulci_labeling.capsul.error_computation')
-    scr_f = op.join(esi_dir, g_fname[:-4] + '_scores.csv')
-    if not op.exists(scr_f):
+    scr_f = op.join(esi_dir, graph_path[:-4] + '_scores.csv')
+    if force or not op.exists(scr_f):
         esi_proc = LabelingEvaluation()
         esi_proc.t1mri = sub.t1
         esi_proc.true_graph = sub.graph
-        esi_proc.labeled_graphs = [labeled_graph]
+        esi_proc.labeled_graphs = labeleds
         esi_proc.sulci_side_list = ss_list
         esi_proc.scores_file = scr_f
+        esi_proc.verbose = False
         esi_proc.run()
+        print(sub.name, ' evaluated')
     else:
         print(scr_f, 'already exists')
+
     return scr_f
 
 
 def evaluate_model(cohort, model_file, param_file, labeled_dir, esi_dir=None,
-                   n_jobs=1):
+                   voxel_size=None, n_jobs=1, force=False):
     # ce = capsul_engine()
     esi_dir = labeled_dir if esi_dir is None else esi_dir
     params = json.load(open(param_file))
@@ -108,7 +136,11 @@ def evaluate_model(cohort, model_file, param_file, labeled_dir, esi_dir=None,
         json.dump(params, open(param_file, 'w+'))
 
     # results = parallel()
-    scores_files = Parallel(n_jobs=real_njobs(n_jobs))(delayed(evaluation_job) (sub, labeled_dir, model_file, param_file, ss_list, esi_dir) for sub in cohort.subjects)
+    n = real_njobs(n_jobs)
+    print("Using {} parallel jobs for {} subjects".format(n, len(cohort.subjects)))
+    scores_files = Parallel(n_jobs=n)(delayed(evaluation_job)
+        (sub, labeled_dir, model_file, param_file, ss_list, esi_dir, voxel_size,
+         force) for sub in cohort.subjects)
 
     dframes = []
     for i, f in enumerate(scores_files):
@@ -126,16 +158,23 @@ def evaluate_model(cohort, model_file, param_file, labeled_dir, esi_dir=None,
 
 def main():
     parser = argparse.ArgumentParser(description='Test trained CNN model')
-    parser.add_argument('-c', dest='cohort', type=str, default=None, required=False,
-                        help='Testing cohort name')
-    parser.add_argument('-m', dest='model', type=str, default=None, required=False,
-                        help='Model name')
+    parser.add_argument('-c', dest='cohort', type=str, default=None,
+                        required=False, help='Testing cohort name')
+    parser.add_argument('-m', dest='model', type=str, default=None,
+                        required=False, help='Model name')
     # parser.add_argument('--cuda', dest='cuda', type=int, default=-1,
     #                     help='Use a speciific cuda device ID or CPU (-1)')
     parser.add_argument('-e', dest='env', type=str, default=None,
                         help="Configuration file")
-    parser.add_argument('-r', dest='runs', type=int, nargs='+', default=[1], help='Runs to process')
-    parser.add_argument('-n', dest='njobs', type=int, default=1, help='Number of parallel jobs')
+    parser.add_argument('-r', dest='runs', type=int, nargs='+', default=[1],
+                        help='Runs to process')
+    parser.add_argument('--vs', dest='vs', type=float,
+                        default=None, help='Target voxel size')
+    parser.add_argument('-n', dest='njobs', type=int, default=1,
+                        help='Number of parallel jobs')
+    parser.add_argument('-f', dest='force', const=True, nargs='?',
+                        default=False, help='Compute the new graph even if the '
+                                            'file already exist')
     args = parser.parse_args()
 
     # Load environnment file
@@ -160,7 +199,8 @@ def main():
         # evaluate_model(Cohort(from_json=cohort_f), env['translation_file'],
         #                model_f, params_f, op.join(out_d, fname))
         evaluate_model(Cohort(from_json=cohort_f), model_f, params_f,
-                       labeled_dir=out_d, n_jobs=args.njobs)
+                       labeled_dir=out_d, n_jobs=args.njobs, force=args.force,
+                       voxel_size=args.vs)
 
 
 if __name__ == "__main__":

@@ -31,7 +31,7 @@ def check_graph(graph_f, h, key='name'):
 
 
 def main():
-    db = "/neurospin/dico/data/bv_databases/baboon/marsBaboons/Adrien"
+    db = "/neurospin/dico/data/bv_databases/macaque/marsMacaques/PRIME_DE"
     g = db + "/[sub]/" \
              "t1mri/default_acquisition/default_analysis/folds/3.1/" \
              "default_session_KK/[hemi][sub]_default_session_KK.arg"

@@ -6,34 +6,32 @@ from soma import aims
 
 
 class SubjectDataset:
-    def __init__(self, name, t1, roots, skeleton, graph, notcut_graph,
-                 replace_roots=True):
+    def __init__(self, name, t1, roots, skeleton, graph, notcut_graph):
+                 # grey_white, hemi_cortex, split_brain, white_mesh, pial_mesh):
         self.name = name
         self.t1 = t1
-        if op.exists(roots):
-            self.roots = roots
-        elif replace_roots:
-            print("/!\\ [subject " + name +
-                  "] roots image doesn't exist, replaced by skeleton image")
-            self.roots = skeleton
+        self.roots = roots
         self.skeleton = skeleton
         self.graph = graph
         self.notcut_graph = notcut_graph
+        # self.grey_white = grey_white
+        # self.hemi_cortex = hemi_cortex
+        # self.split_brain = split_brain
+        # self.white_mesh = white_mesh
+        # self.pial_mesh = pial_mesh
 
     def __lt__(self, other):
         return self.name < other.name
 
     def check(self):
-        if not op.exists(self.t1):
-            raise IOError("Missing file: " + self.t1)
-        if not op.exists(self.roots):
-            raise IOError("Missing file: " + self.roots)
-        if not op.exists(self.skeleton):
-            raise IOError("Missing file: " + self.skeleton)
-        if not op.exists(self.graph):
-            raise IOError("Missing file: " + self.graph)
         if self.notcut_graph and not op.exists(self.notcut_graph):
             raise IOError("Missing file: " + self.notcut_graph)
+        for f in [self.t1, self.roots, self.skeleton, self.graph,
+                  # self.grey_white, self.split_brain, self.white_mesh,
+                  # self.pial_mesh
+                ]:
+            if not op.exists(f):
+                raise IOError("Missing file: " + f)
         if not isinstance(self.name, str):
             raise ValueError("Name must be a string")
 
@@ -49,7 +47,7 @@ class CohortIterator:
         return item
 
 
-class Cohort:
+class Cohort(object):
     def __init__(self, name="Unnamed", subjects=[], from_json=None, check=True):
         if name is None and subjects is None and from_json is None:
             raise ValueError("Cannot create Cohort without inputs.")
@@ -68,7 +66,10 @@ class Cohort:
                 for s in data["subjects"]:
                     sub = SubjectDataset(
                         s['name'], s['t1'], s['roots'], s['skeleton'],
-                        s['graph'], s['notcut_graph'])
+                        s['graph'], s['notcut_graph'],
+                        # s['grey_white'], s['hemi_cortex'], s['split_brain'],
+                        # s['white_mesh'], s['pial_mesh']
+                    )
                     if check:
                         sub.check()
                     self.subjects.append(sub)
@@ -78,6 +79,14 @@ class Cohort:
 
     def __len__(self):
         return len(self.subjects)
+
+    def __contains__(self, subject):
+        if isinstance(subject, str):
+            for s in self.subjects:
+                if s.name == subject:
+                    return True
+            return False
+        return subject in self.subjects
 
     def get_by_name(self, name):
         for s in self.subjects:
@@ -111,7 +120,12 @@ class Cohort:
                 "roots": s.roots,
                 "skeleton": s.skeleton,
                 "graph": s.graph,
-                "notcut_graph": s.notcut_graph
+                "notcut_graph": s.notcut_graph,
+                # "grey_white": s.grey_white,
+                # "hemi_cortex": s.hemi_cortex,
+                # "split_brain": s.split_brain,
+                # "white_mesh": s.white_mesh,
+                # "pial_mesh": s.pial_mesh
             })
         data = {"name": self.name, "subjects": subdata}
         if filename:
@@ -119,6 +133,9 @@ class Cohort:
                 json.dump(data, outfile)
         return data
 
+    # def get_sulci_side_list(self):
+    #     for s in self.subjects:
+            
 
 def bv_cohort(name, db_dir, hemi, centers, acquisition="default_acquisition",
               analysis="default_analysis", graph_v="3.3", ngraph_v="3.2",
@@ -160,16 +177,12 @@ def bv_cohort(name, db_dir, hemi, centers, acquisition="default_acquisition",
         )
 
         # Roots
-        roots = op.join(
-            db_dir, scenters[i], s, 't1mri', acquisition, analysis,
-            'segmentation', hemi + 'roots_' + s + '.nii.gz'
-        )
+        seg_dir = op.join(db_dir, scenters[i], s, 't1mri', acquisition,
+                          analysis, 'segmentation')
+        roots = op.join(seg_dir, hemi + 'roots_' + s + '.nii.gz')
 
         # Skeleton
-        skeleton = op.join(
-            db_dir, scenters[i], s, 't1mri', acquisition, analysis,
-            'segmentation', hemi + 'skeleton_' + s + '.nii.gz'
-        )
+        skeleton = op.join(seg_dir, hemi + 'skeleton_' + s + '.nii.gz')
 
         # Graph
         gfile = op.join(
@@ -186,7 +199,13 @@ def bv_cohort(name, db_dir, hemi, centers, acquisition="default_acquisition",
                 ngraph_v, hemi + s + '.arg'
             )
 
-        subjects.append(SubjectDataset(s, t1, roots, skeleton, gfile, ngfile))
+        # Grey white
+        # gw = op.join(seg_dir, hemi + 'grey_white_' + s + '.nii.gz')
+        # gw = op.join(seg_dir, hemi + 'grey_white_' + s + '.nii.gz')
+
+        subjects.append(SubjectDataset(s, t1, roots, skeleton, gfile, ngfile,
+                                       # gw, hs, sb, white_m, pial_m
+                                       ))
     return Cohort(name + "_hemi-" + hemi, subjects)
 
 

@@ -38,7 +38,6 @@ def main():
     print("DB paths:", db_paths)
 
     dbs = list(BVDatabase(path) for path in db_paths)
-    mesh_templ = "*/[sub]/*/*/*/segmentation/mesh/[sub]_[hemi]white.gii"
 
     graphs = []
     for f in listdir(eval_dir):
@@ -60,7 +59,7 @@ def main():
             mesh = None
             for db in dbs:
                 meshs = db.get_from_template(
-                    mesh_templ, sub=sub, hemi=hemi)
+                    "morphologist_mesh", type="white", sub=sub, hemi=hemi)
                 if len(meshs) > 0:
                     mesh = meshs[0]
                     whitemeshs.append(mesh)
@@ -76,7 +75,7 @@ def main():
             for ptw in ['left_to_right', 'right_to_left']:
                 fname, _ = op.splitext(op.split(graph)[1])
                 out_f = op.join(output_dir, fname + '_' + ptw + '.jpg')
-                ana.labelled_graph_snapshot(mesh, graph, ptw, out_f)
+                ana.show_labelled_graph(mesh, graph, ptw, save_as=out_f)
                 ff.append(op.split(out_f)[1])
             subfiles.append(ff)
 

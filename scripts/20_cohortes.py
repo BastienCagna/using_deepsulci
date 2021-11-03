@@ -1,10 +1,8 @@
 import matplotlib.pyplot as plt
-from using_deepsulci.cohort import Cohort
 import argparse
-import json
 import os.path as op
-from os import listdir
 import numpy as np
+from utils import load_cohorts
 
 
 def cohorts_plot(cohorts, hemi):
@@ -33,13 +31,9 @@ def main():
     parser.add_argument('-e', dest='env', type=str, default=None, help="Configuration file")
     args = parser.parse_args()
 
-    # Load environnment file
     env_f = args.env if args.env else op.join(op.split(__file__)[0], "env.json")
-    env = json.load(open(env_f))
 
-    c_dir = op.join(env['working_path'], "cohorts")
-    cohorts = list(Cohort(from_json=op.join(c_dir, f)) for f in listdir(c_dir))
-    cohorts_plot(cohorts, 'L')
+    cohorts_plot(load_cohorts(env_f), 'L')
 
 
 if __name__ == "__main__":

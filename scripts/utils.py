@@ -3,7 +3,26 @@ from joblib import cpu_count
 from using_deepsulci.cohort import Cohort
 from datetime import datetime
 import sys
-from os import system
+from os import system, listdir
+import pandas as pd
+import json
+
+
+def sulci_list_from_graph(graph, key='name'):
+    sslist = []
+    for v in graph.vertices():
+        if key in v.keys():
+            sslist.append(v[key])
+    return list(sorted(set(sslist)))
+
+
+def sulci_list_from_evaluation(csv_f):
+    csv = pd.read_csv(csv_f)
+    sslist = []
+    for k in csv.keys():
+        if k.startswith('acc_'):
+            sslist.append(k[4:])
+    return list(sorted(set(sslist)))
 
 
 def extend_folds(folds):
@@ -19,12 +38,23 @@ def extend_folds(folds):
     return extended_folds
 
 
+def load_cohorts(env_f):
+    with open(env_f, 'r') as env_js:
+        env = json.load(env_js)
+        c_dir = op.join(env['working_path'], "cohorts")
+        cohorts = list(Cohort(from_json=op.join(c_dir, f))
+                       for f in listdir(c_dir))
+    return cohorts
+
+
 def run(cmd):
     print(cmd)
     system(cmd)
 
 
 class Logger(object):
+    """ Logger that print messages in the temrinal and in a text file.
+    """
     def __init__(self, filename):
         self.terminal = sys.stdout
         self.log = open(filename, "a")
@@ -41,6 +71,15 @@ class Logger(object):
 
 
 def real_njobs(n=0):
+    """ Return the number of CPU to use.
+
+    Parameters
+    ==========
+    n: int (default: 0)
+        Number of CPU. If negative or 0, the function return the total number
+        of CPUs of the computer minus n. By default, the function return the
+        total number of CPUs.
+    """
     return min(n, cpu_count()) if n > 0 else cpu_count() - n
 
 
