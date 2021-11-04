@@ -1,26 +1,41 @@
 """
+    Search files for all defined cohorts
+    ====================================
+
     This script create JSON files that will be used to provide graphs when
     learning models. It defines a set of cohort based on several database where
     subjects' graphs have been mannually labeled.
-
-    For now (08/04/2021), three databases are available with a total of 216
-    subjects.
 
     This script need a env.json file saved in this directory that specify:
         - "bv_databases_path": Where all Brainvisa databased are located
         - "working_path": Where output files will be saved
 
-    If any graph is missing, the whole database will be considered as
+    /!\ If any graph is missing, the whole database will be considered as
     unavailable.
-"""
 
+    Parameters
+    ----------
+    -e [path]: str (opt.)
+        Set the path to the settings file (.json).
+        If not specified, it use default settings.
+
+    Outputs
+    -------
+    Write cohors JSON file in the [working_path]/cohorts directory.
+
+    Examples
+    --------
+    python 00_create_cohorts.py -e env_active_learning.json
+"""
 # Author : Bastien Cagna (bastiencagna@gmail.com)
 
 import os.path as op
 from os import makedirs
-import json
 import argparse
+import numpy as np
+import matplotlib.pyplot as plt
 from using_deepsulci.cohort import bv_cohort, Cohort
+from using_deepsulci.settings import Settings
 from soma import aims
 
 
@@ -49,18 +64,21 @@ def filter_names_of_cohort(cohort, subgraph_dir, sulci_to_keep=[], default='unkn
     makedirs(subgraph_dir, exist_ok=True)
 
     for i, sub in enumerate(cohort.subjects):
-        sgraph_f = op.join(subgraph_dir, op.split(sub.graph)[1][:-4] + '_filtered.arg')
+        sgraph_f = op.join(subgraph_dir, op.split(
+            sub.graph)[1][:-4] + '_filtered.arg')
         filter_sulci_names(sub.graph, sgraph_f, sulci_to_keep, default)
         cohort.subjects[i].graph = sgraph_f
 
         if sub.notcut_graph:
-            sgraph_f = op.join(subgraph_dir, op.split(sub.notcut_graph)[1][:-4] + '_filtered.arg')
-            filter_sulci_names(sub.notcut_graph, sgraph_f, sulci_to_keep, default)
+            sgraph_f = op.join(subgraph_dir, op.split(
+                sub.notcut_graph)[1][:-4] + '_filtered.arg')
+            filter_sulci_names(sub.notcut_graph, sgraph_f,
+                               sulci_to_keep, default)
             cohort.subjects[i].notcut_graph = sgraph_f
     return cohort
 
 
-def foldico_cohorts(cohort_desc, hemi="both", composed_desc={}, modified_graphs_dir=None):
+def foldico_cohorts(cohort_desc, hemi="both", composed_desc={}):
     """ Create all used cohorts based on several available databases.  """
 
     hemis = ["L", "R"] if hemi == "both" else [hemi]
@@ -112,11 +130,6 @@ def foldico_cohorts(cohort_desc, hemi="both", composed_desc={}, modified_graphs_
                     if do_not_add:
                         break
 
-            # FIXME: retest this
-            # if modified_graphs_dir and 'keep_sulci_names' in desc.keys():
-            #     d = op.join(modified_graphs_dir, cohort.name)
-            #     cohort = filter_names_of_cohort(cohort, d, desc['keep_sulci_names'])
-
             if not do_not_add:
                 cohorts[cname] = cohort
                 all_cohortes.append(cohort)
@@ -125,28 +138,51 @@ def foldico_cohorts(cohort_desc, hemi="both", composed_desc={}, modified_graphs_
     return all_cohortes
 
 
+def cohorts_plot(cohorts, hemi):
+    n_rows = len(cohorts)
+    subjects = []
+    for c in cohorts:
+        if c.name[0].isupper() and c.name.endswith(hemi):
+            subjects.extend(set(s.name for s in c.subjects))
+    n_cols = len(subjects)
+
+    img = np.zeros((n_rows, n_cols))
+    for ic, c in enumerate(cohorts):
+        for j, sub in enumerate(subjects):
+            if sub in c:
+                img[ic, j] = 1
+
+    fig = plt.figure(figsize=(12, 6))
+    plt.imshow(img, interpolation="nearest", aspect="auto")
+    plt.xticks(range(len(subjects)), subjects, rotation=60)
+    plt.show()
+    return fig
+
+
 def main():
-    parser = argparse.ArgumentParser(description='Create cohorts files (.json)')
-    parser.add_argument('-e', dest='env', type=str, default=None, help="Configuration file")
+    parser = argparse.ArgumentParser(
+        description='Create cohorts files (.json)')
+    parser.add_argument('-e', dest='env', type=str,
+                        default=None, help="Configuration file")
     args = parser.parse_args()
 
-    # Load environnment file
-    env_f = args.env if args.env else op.join(op.split(__file__)[0], "env.json")
-    env = json.load(open(env_f))
-
-    cohorts_dir = op.join(env['working_path'], "cohorts")
-    modg_dir = op.join(env['working_path'], "modified_graphs")
-    makedirs(cohorts_dir, exist_ok=True)
-    print("Cohorts will be saved to:", cohorts_dir)
+    # Load settings
+    settings = Settings(args.env)
 
     # Create all cohorts for both hemispheres
-    cohorts = foldico_cohorts(env['cohorts'],
-                              composed_desc=env['composed_cohorts'],
-                              modified_graphs_dir=modg_dir)
+    cohorts = foldico_cohorts(
+        settings.get_parameter('cohorts'),
+        composed_desc=settings.get_parameter('composed_cohorts', {}))
 
+    # Save all the cohorts
     for cohort in cohorts:
-        fname = "cohort-" + cohort.name + ".json"
-        cohort.to_json(op.join(cohorts_dir, fname))
+        cohort.to_json(settings.outputs.generate_from_template(
+            "cohort", name=cohort.name, hemi=cohort.hemi, makedirs=True))
+
+    # Plot them
+    for h in ['L', 'R']:
+        fig = cohorts_plot(cohorts, h)
+        fig.savefig(op.join())
 
 
 if __name__ == "__main__":

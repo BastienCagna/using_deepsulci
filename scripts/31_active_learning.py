@@ -1,3 +1,37 @@
+"""
+    Active learning study
+    =====================
+
+    Parameters
+    ----------
+    --cuda [device]: int (opt.)
+        Specify the cuda device to use. If -1, it use the CPU.
+        Default is -1.
+
+    -e [path]: str (opt.)
+        Set the path to the environment file (.json).
+        If not specified, it use the env.json file that should be created in the scripts/ folder.
+
+    -n [njobs]: int (opt.)
+        Number of parallel jobs to use.
+        Default is 1.
+
+    -f: flag (opt.)
+        Re-do the evaluation if the labelled graph already exist.
+
+    --vs [voxel_size]: float (opt.)
+        Isotropic voxel size used to resample data before the learning.
+        By default, no resampling will be performed.
+
+    Outputs
+    -------
+
+
+    Examples
+    --------
+    python 31_active_learning.py -e env_active_learning.json -n 24 -f --cuda 0 -vs 2
+"""
+# Author : Bastien Cagna (bastiencagna@gmail.com)
 
 import argparse
 import os.path as op
@@ -48,9 +82,9 @@ def learn_active_model(train_cohort, modelname, d, lr, m, r, init, amount,
            "--dropout {:f} --lr {:f} --momentum {:f} -r {:d} -s 1 2 3 " \
            "-e {} --active --init {:d} --amount {:d} --strategy {} " \
            "--max_iter {:d} --test {} --purge".format(
-        train_cohort, modelname, c, d, lr, m, r, env_file, init, amount, strat,
-        maxIt, test_cohort
-    )
+               train_cohort, modelname, c, d, lr, m, r, env_file, init, amount, strat,
+               maxIt, test_cohort
+           )
 
     if voxel_size:
         cmd += ' --vs {}'.format(voxel_size)
@@ -87,8 +121,7 @@ def main():
                                             'file already exist')
     args = parser.parse_args()
 
-    env_file = args.env if args.env else \
-        op.join(op.dirname(op.realpath(__file__)), 'env.json')
+    # TODO: use .json file to speficy cohortes and parameters
 
     # Learn and test
     voxel_size = 2
@@ -128,7 +161,7 @@ def main():
             retrain=False,
             test_cohort=test,
             c=args.cuda,
-            env_file=env_file,
+            env_file=args.env,
             voxel_size=voxel_size
         )
 

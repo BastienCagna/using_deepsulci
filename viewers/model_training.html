@@ -13,7 +13,6 @@
     <script type="text/javascript">
         function timePlot(data, id, metric, metricTitle) {
             let traces = [];
-            console.log(data);
             for(let t=0; t < data.length; t++) {
                 traces.push({
                     x: data[t]['records']['epoch'],
@@ -35,6 +34,8 @@
 
         function writeGraphs() {
             timePlot(models, 'model_train_loss', 'train_loss', 'Training Loss');
+            timePlot(models, 'model_train_acc', 'train_acc', 'Training Accuracy');
+            timePlot(models, 'model_test_loss', 'test_loss', 'Testing Loss');
             timePlot(models, 'model_test_acc', 'test_acc', 'Testing Accuracy');
             timePlot(models, 'model_lr', 'lr', 'Learning Rate');
             timePlot(models, 'model_momentum', 'momentum', 'Momentum');
@@ -96,10 +97,14 @@
         <h3>Log</h3>
         <div class="row">
             <div class="col-md-6" id="model_train_loss"></div>
-            <div class="col-md-6" id="model_lr"></div>
+            <div class="col-md-6" id="model_test_loss"></div>
         </div>
         <div class="row">
+            <div class="col-md-6" id="model_train_acc"></div>
             <div class="col-md-6" id="model_test_acc"></div>
+        </div>
+        <div class="row">
+            <div class="col-md-6" id="model_lr"></div>
             <div class="col-md-6" id="model_momentum"></div>
         </div>
     </div>

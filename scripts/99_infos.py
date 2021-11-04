@@ -1,3 +1,7 @@
+"""
+    A command line to print informations about cohortes, processings, results...
+"""
+
 import json
 import argparse
 import os.path as op

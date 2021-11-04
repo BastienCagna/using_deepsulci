@@ -1,4 +1,4 @@
-from os import listdir
+from os import listdir, makedirs
 import os.path as op
 import numpy as np
 import json
@@ -7,7 +7,7 @@ from soma import aims
 
 class SubjectDataset:
     def __init__(self, name, t1, roots, skeleton, graph, notcut_graph):
-                 # grey_white, hemi_cortex, split_brain, white_mesh, pial_mesh):
+        # grey_white, hemi_cortex, split_brain, white_mesh, pial_mesh):
         self.name = name
         self.t1 = t1
         self.roots = roots
@@ -29,7 +29,7 @@ class SubjectDataset:
         for f in [self.t1, self.roots, self.skeleton, self.graph,
                   # self.grey_white, self.split_brain, self.white_mesh,
                   # self.pial_mesh
-                ]:
+                  ]:
             if not op.exists(f):
                 raise IOError("Missing file: " + f)
         if not isinstance(self.name, str):
@@ -48,20 +48,22 @@ class CohortIterator:
 
 
 class Cohort(object):
-    def __init__(self, name="Unnamed", subjects=[], from_json=None, check=True):
+    def __init__(self, name="Unnamed", hemi="X", subjects=[], from_json=None, check=True):
         if name is None and subjects is None and from_json is None:
             raise ValueError("Cannot create Cohort without inputs.")
         elif from_json is None:
             self.name = name
+            self.hemi = hemi
             self.subjects = subjects
 
             if check:
                 for s in subjects:
-                        s.check()
+                    s.check()
         else:
             with open(from_json, 'r') as infile:
                 data = json.load(infile)
                 self.name = data["name"]
+                self.hemi = data["hemi"]
                 self.subjects = []
                 for s in data["subjects"]:
                     sub = SubjectDataset(
@@ -127,15 +129,18 @@ class Cohort(object):
                 # "white_mesh": s.white_mesh,
                 # "pial_mesh": s.pial_mesh
             })
-        data = {"name": self.name, "subjects": subdata}
+        data = {"name": self.name, "hemi": self.hemi, "subjects": subdata}
+
         if filename:
+            dir_path, _ = op.split(filename)
+            makedirs(dir_path, exist_ok=True)
             with open(filename, 'w') as outfile:
                 json.dump(data, outfile)
         return data
 
     # def get_sulci_side_list(self):
     #     for s in self.subjects:
-            
+
 
 def bv_cohort(name, db_dir, hemi, centers, acquisition="default_acquisition",
               analysis="default_analysis", graph_v="3.3", ngraph_v="3.2",
@@ -206,7 +211,7 @@ def bv_cohort(name, db_dir, hemi, centers, acquisition="default_acquisition",
         subjects.append(SubjectDataset(s, t1, roots, skeleton, gfile, ngfile,
                                        # gw, hs, sb, white_m, pial_m
                                        ))
-    return Cohort(name + "_hemi-" + hemi, subjects)
+    return Cohort(name, hemi, subjects)
 
 
 # TODO: remove following lines
